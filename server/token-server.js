@@ -26,6 +26,7 @@ app.get('/health', (_req, res) => {
 
 app.post('/getToken', async (req, res) => {
   const { roomName, participantName, role } = req.body
+  const normalizedRole = String(role || 'patient').trim().toLowerCase()
 
   if (!roomName || !participantName) {
     return res.status(400).json({
@@ -37,7 +38,7 @@ app.post('/getToken', async (req, res) => {
     identity: participantName,
     ttl: '1h',
     name: participantName,
-    metadata: JSON.stringify({ role: role || 'patient' }),
+    metadata: JSON.stringify({ role: normalizedRole }),
   })
 
   at.addGrant({
@@ -46,6 +47,10 @@ app.post('/getToken', async (req, res) => {
     canPublish: true,
     canSubscribe: true,
     canPublishData: true,
+    canPublishSources:
+      normalizedRole === 'doctor'
+        ? ['camera', 'microphone', 'screen_share', 'screen_share_audio']
+        : ['camera', 'microphone'],
   })
 
   const token = await at.toJwt()
