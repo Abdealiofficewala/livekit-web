@@ -7,12 +7,20 @@ import {
 } from '@livekit/components-react'
 import '@livekit/components-styles'
 import { Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { RoomEvent } from 'livekit-client'
 import './App.css'
 
 const SERVER_URL =
   import.meta.env.VITE_LIVEKIT_URL || 'wss://your-livekit-url.livekit.cloud'
 const TOKEN_ENDPOINT =
   import.meta.env.VITE_TOKEN_ENDPOINT || 'http://localhost:3001/getToken'
+
+const END_ROOM_ENDPOINT =
+  import.meta.env.VITE_END_ROOM_ENDPOINT ||
+  `${TOKEN_ENDPOINT.replace(/\/getToken\/?$/i, '').replace(/\/$/, '')}/endRoom`
+
+/** Sent by host over LiveKit data channel so patients redirect before/at room delete. */
+const HOST_MEETING_END_PAYLOAD = JSON.stringify({ type: 'lk_meeting_ended_by_host' })
 
 async function requestToken({ roomName, participantName, role }) {
   const response = await fetch(TOKEN_ENDPOINT, {
@@ -126,6 +134,61 @@ function ControlBarActionLogger() {
       container.removeEventListener('click', onClickCapture, true)
     }
   }, [])
+  return null
+}
+
+/**
+ * Ensures all participants go to the home page when the room ends (e.g. host deletes room).
+ * LiveKitRoom's onDisconnected alone may not always run for remote teardown.
+ */
+function RoomEndRedirect() {
+  const room = useRoomContext()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!room) return undefined
+
+    const onDisconnected = () => {
+      navigate('/', { replace: true })
+    }
+
+    room.on(RoomEvent.Disconnected, onDisconnected)
+    return () => {
+      room.off(RoomEvent.Disconnected, onDisconnected)
+    }
+  }, [room, navigate])
+
+  return null
+}
+
+/** Patients: redirect home when host broadcasts meeting end (or on room disconnect). */
+function PatientHostEndedRedirect() {
+  const room = useRoomContext()
+  const navigate = useNavigate()
+  const params = useParams()
+  const role = params?.role || ''
+
+  useEffect(() => {
+    if (!room || normalizeRole(role) !== 'patient') return undefined
+
+    const onData = (payload) => {
+      try {
+        const text = new TextDecoder().decode(payload)
+        const data = JSON.parse(text)
+        if (data?.type === 'lk_meeting_ended_by_host') {
+          navigate('/', { replace: true })
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    room.on(RoomEvent.DataReceived, onData)
+    return () => {
+      room.off(RoomEvent.DataReceived, onData)
+    }
+  }, [room, navigate, role])
+
   return null
 }
 
@@ -805,14 +868,14 @@ function RoomPage() {
   const handleRoomDisconnected = () => {
     console.log('[Meeting Left]', { role, roomName, participantName })
     if (hasConnectedOnce) {
-      navigate('/', { replace: false })
+      navigate('/', { replace: true })
       return
     }
 
     setError(
       'Could not join room. Check your .env values (URL, API key/secret) and token server.',
     )
-    navigate('/', { replace: false })
+    navigate('/', { replace: true })
   }
 
   const handleLeaveIntent = () => {
@@ -827,12 +890,42 @@ function RoomPage() {
   const handleConfirmLeave = async () => {
     console.log('[Leave Confirmed] Disconnecting from meeting')
     setShowLeaveModal(false)
+    const isHost = normalizeRole(role) === 'doctor'
     try {
+      if (isHost && roomInstance?.localParticipant) {
+        try {
+          const encoder = new TextEncoder()
+          await roomInstance.localParticipant.publishData(
+            encoder.encode(HOST_MEETING_END_PAYLOAD),
+            { reliable: true },
+          )
+        } catch (publishError) {
+          console.warn('[host] publishData failed', publishError)
+        }
+      }
+      if (isHost && roomName.trim()) {
+        try {
+          const response = await fetch(END_ROOM_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomName: roomName.trim(),
+              role: 'doctor',
+            }),
+          })
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}))
+            console.warn('[endRoom] server response', response.status, err)
+          }
+        } catch (fetchError) {
+          console.warn('[endRoom] request failed', fetchError)
+        }
+      }
       if (roomInstance) {
         await roomInstance.disconnect()
       }
     } finally {
-      navigate('/', { replace: false })
+      navigate('/', { replace: true })
     }
   }
 
@@ -917,6 +1010,8 @@ function RoomPage() {
         className={`livekit-room role-${normalizeRole(role)}`}
       >
         <ControlBarActionLogger />
+        <RoomEndRedirect />
+        <PatientHostEndedRedirect />
         <LeaveConfirmInterceptor
           onLeaveIntent={handleLeaveIntent}
           onRoomReady={setRoomInstance}
@@ -936,9 +1031,13 @@ function RoomPage() {
             aria-modal="true"
             aria-labelledby="leave-modal-title"
           >
-            <h2 id="leave-modal-title">Leave meeting?</h2>
+            <h2 id="leave-modal-title">
+              {normalizeRole(role) === 'doctor' ? 'End meeting?' : 'Leave meeting?'}
+            </h2>
             <p>
-              Your call will end and you will return to the join screen.
+              {normalizeRole(role) === 'doctor'
+                ? 'This will end the call for everyone in the room. You will return to the join screen.'
+                : 'Your call will end and you will return to the join screen.'}
             </p>
             <div className="leave-modal-actions">
               <button
@@ -953,7 +1052,7 @@ function RoomPage() {
                 className="leave-modal-btn danger"
                 onClick={handleConfirmLeave}
               >
-                Leave
+                {normalizeRole(role) === 'doctor' ? 'End for everyone' : 'Leave'}
               </button>
             </div>
           </div>
