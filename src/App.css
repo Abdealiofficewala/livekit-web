@@ -341,6 +341,15 @@
   box-shadow: 0 14px 28px rgba(20, 32, 62, 0.08);
 }
 
+.meeting-item:focus {
+  outline: none;
+}
+
+.meeting-item:focus-visible {
+  border-color: #3f5efb;
+  box-shadow: 0 0 0 3px rgba(63, 94, 251, 0.25);
+}
+
 .meeting-row {
   display: flex;
   justify-content: space-between;
@@ -494,57 +503,311 @@
 
 .room-page {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .livekit-room {
   height: 100vh;
   width: 100%;
+  overflow: hidden;
 }
 
 .room-layout {
-  display: grid;
-  grid-template-columns: 2fr 380px;
-  gap: 12px;
+  display: block;
   height: 100%;
-  padding: 12px;
+  padding: 8px;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .video-section {
   border-radius: 12px;
   overflow: hidden;
+  position: relative;
+  height: 100%;
 }
 
-.chat-section {
-  border: 1px solid #dbe3f1;
+.video-section .lk-video-conference {
+  height: 100%;
+}
+
+.video-section .lk-video-conference-inner {
+  height: 100%;
+  padding-bottom: calc(var(--lk-control-bar-height) + 18px);
+  box-sizing: border-box;
+}
+
+.video-section .lk-grid-layout-wrapper,
+.video-section .lk-focus-layout-wrapper {
+  height: 100%;
+}
+
+/* Google Meet-like fixed bottom controls (no scrolling needed). */
+.video-section .lk-control-bar,
+.video-section .lk-agent-control-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: fit-content;
+  max-width: calc(100% - 20px);
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  z-index: 30;
+  padding-inline: 10px;
+  backdrop-filter: blur(6px);
+}
+
+/* Custom professional theme for the single LiveKit chat panel. */
+.video-section .lk-chat {
+  width: min(400px, 42vw);
+  border-left: 1px solid rgba(148, 163, 184, 0.24);
+  background: #111827;
+  backdrop-filter: blur(10px);
+}
+
+.video-section .lk-chat-header {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  justify-content: flex-start;
+  padding: 16px 18px;
+  color: #f3f4f6;
+  font-weight: 700;
+  letter-spacing: 0.012em;
+  font-size: 1rem;
+  background: rgba(15, 23, 42, 0.22);
+  position: relative;
+}
+
+.video-section .lk-chat-header .lk-close-button {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   border-radius: 12px;
-  background: #fff;
+  color: #cbd5e1;
+  transition: all 0.2s ease;
+}
+
+.video-section .lk-chat-header .lk-close-button:hover {
+  background: rgba(148, 163, 184, 0.18);
+  color: #ffffff;
+}
+
+.video-section .lk-chat-messages {
+  gap: 12px;
+  padding: 14px 12px 10px;
+  scrollbar-gutter: stable;
+}
+
+.video-section .lk-chat-entry {
+  position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  padding: 10px;
+  width: fit-content;
+  max-width: 86%;
+  margin: 0 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.3);
+  padding: 8px 12px 10px;
 }
 
-.chat-section h2 {
-  margin: 4px 8px 10px;
-  font-size: 1rem;
+.video-section .lk-chat-entry .lk-meta-data {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  color: #dbe3f1;
+  font-size: 0.72rem;
+  margin: 4px 0 0;
+  pointer-events: none;
+  width: auto;
+  align-self: flex-end;
+  order: 2;
 }
 
-.chat-section .lk-chat {
-  height: 100%;
+.video-section .lk-chat-entry .lk-meta-data .lk-participant-name {
+  margin-top: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  letter-spacing: 0.008em;
+}
+
+.video-section .lk-chat-entry .lk-meta-data .lk-timestamp {
+  margin-left: 0;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.66rem;
+  opacity: 0.95;
+  white-space: nowrap;
+}
+
+.video-section .lk-chat-entry .lk-message-body {
+  max-width: 100%;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  color: #ffffff;
+  line-height: 1.42;
+  font-size: 0.96rem;
+  order: 1;
+  background-color: transparent !important;
+}
+
+.video-section .lk-chat-entry[data-lk-message-origin='remote'] {
+  background: transparent;
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.video-section .lk-chat-entry[data-lk-message-origin='local'] {
+  margin-left: auto;
+  background: transparent;
+  border-color: rgba(148, 163, 184, 0.32);
+}
+
+.video-section .lk-chat-form {
+  gap: 11px;
+  padding: 12px 12px 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.22);
+}
+
+.video-section .lk-chat-form .lk-chat-form-input {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.85);
+  color: #f8fafc;
+  padding: 11px 13px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.video-section .lk-chat-form .lk-chat-form-input::placeholder {
+  color: #8fa3bf;
+}
+
+.video-section .lk-chat-form .lk-chat-form-input:focus {
+  border-color: #6ba8ff;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.22);
+  outline: none;
+}
+
+.video-section .lk-chat-form .lk-button {
+  border-radius: 12px;
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+  min-width: 82px;
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.33);
+}
+
+.video-section .lk-chat-form .lk-button:hover {
+  background: #3578f6;
+}
+
+/* Host-only screen share control: hide for patient role in UI. */
+.livekit-room.role-patient .lk-button[data-lk-source='screen_share'],
+.livekit-room.role-patient .lk-button-group [data-lk-source='screen_share'],
+.livekit-room.role-patient .lk-button-group-menu:has([data-lk-source='screen_share']) {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  .video-section .lk-chat {
+    width: min(100%, 365px);
+  }
 }
 
 @media (max-width: 1024px) {
   .room-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr minmax(250px, 36vh);
+    padding: 6px;
   }
+
+  .video-section .lk-video-conference-inner {
+    padding-bottom: calc(var(--lk-control-bar-height) + 14px);
+  }
+
+  .video-section .lk-control-bar,
+  .video-section .lk-agent-control-bar {
+    bottom: 8px;
+    max-width: calc(100% - 12px);
+  }
+}
+
+.leave-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.65);
+  display: grid;
+  place-items: center;
+  z-index: 1200;
+  padding: 20px;
+}
+
+.leave-modal {
+  width: min(420px, 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: #0f172a;
+  box-shadow: 0 20px 40px rgba(2, 6, 23, 0.45);
+  padding: 18px;
+}
+
+.leave-modal h2 {
+  margin: 0 0 8px;
+  font-size: 1.12rem;
+  color: #f8fafc;
+}
+
+.leave-modal p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 0.95rem;
+}
+
+.leave-modal-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.leave-modal-btn {
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.leave-modal-btn.secondary {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.leave-modal-btn.secondary:hover {
+  background: #3f4f66;
+}
+
+.leave-modal-btn.danger {
+  background: #dc2626;
+  color: #fff;
+}
+
+.leave-modal-btn.danger:hover {
+  background: #ef4444;
 }
 
 @media (min-width: 980px) {
   .join-layout {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .join-card,

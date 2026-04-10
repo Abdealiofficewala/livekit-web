@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Chat,
   LiveKitRoom,
   RoomAudioRenderer,
   VideoConference,
+  useRoomContext,
 } from '@livekit/components-react'
 import '@livekit/components-styles'
 import { Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -60,6 +60,73 @@ function generateRoomName() {
 
 function normalizeRole(role) {
   return role.trim().toLowerCase()
+}
+
+function LeaveConfirmInterceptor({ onLeaveIntent, onRoomReady }) {
+  const room = useRoomContext()
+
+  useEffect(() => {
+    if (room) onRoomReady(room)
+  }, [room, onRoomReady])
+
+  useEffect(() => {
+    const container = document.querySelector('.livekit-room')
+    if (!container) return undefined
+
+    const onClickCapture = (event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      const leaveButton = target.closest('.lk-disconnect-button')
+      if (!leaveButton) return
+
+      event.preventDefault()
+      event.stopPropagation()
+      if (typeof event.stopImmediatePropagation === 'function') {
+        event.stopImmediatePropagation()
+      }
+
+      onLeaveIntent()
+    }
+
+    container.addEventListener('click', onClickCapture, true)
+    return () => {
+      container.removeEventListener('click', onClickCapture, true)
+    }
+  }, [onLeaveIntent])
+
+  return null
+}
+
+function ControlBarActionLogger() {
+  useEffect(() => {
+    const container = document.querySelector('.livekit-room')
+    if (!container) return undefined
+
+    const onClickCapture = (event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      const controlButton = target.closest(
+        '.lk-control-bar .lk-button, .lk-control-bar .lk-chat-toggle, .lk-control-bar .lk-disconnect-button, .lk-agent-control-bar .lk-button, .lk-agent-control-bar .lk-disconnect-button',
+      )
+      if (!controlButton) return
+
+      const action =
+        controlButton.getAttribute('data-lk-source') ||
+        controlButton.getAttribute('aria-label') ||
+        controlButton.textContent?.trim() ||
+        'unknown-action'
+
+      console.log('[Meeting Bottom Bar Click]', action)
+    }
+
+    container.addEventListener('click', onClickCapture, true)
+    return () => {
+      container.removeEventListener('click', onClickCapture, true)
+    }
+  }, [])
+  return null
 }
 
 function formatLocalDateTimeForInput(date) {
@@ -138,7 +205,7 @@ function JoinPage() {
   }))
   const [roomType, setRoomType] = useState('instant') // 'instant' | 'scheduled'
   const [scheduledStart, setScheduledStart] = useState(() => {
-    const date = new Date(Date.now() + 30 * 60 * 1000)
+    const date = new Date()
     return formatLocalDateTimeForInput(date)
   })
   const [error, setError] = useState('')
@@ -424,15 +491,23 @@ function JoinPage() {
                 const showCountdown = Boolean(startIso) && !isOpenNow
                 const isStartingSoon = showCountdown && secondsLeft <= 60
                 const canQuickJoin = Boolean(startIso) && (isOpenNow || secondsLeft <= 60)
+                const openMeetingCard = () => {
+                  if (!roomName) return
+                  setMeetingName('')
+                  setMeetingModal({ isOpen: true, roomName, startIso })
+                }
                 return (
                   <li key={roomName || `${startIso}-${listTick}`}>
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
                       className="meeting-item"
-                      onClick={() => {
-                        if (!roomName) return
-                        setMeetingName('')
-                        setMeetingModal({ isOpen: true, roomName, startIso })
+                      onClick={openMeetingCard}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          openMeetingCard()
+                        }
                       }}
                     >
                       <div className="meeting-row">
@@ -509,7 +584,7 @@ function JoinPage() {
                           </button>
                         </div>
                       )}
-                    </button>
+                    </div>
                   </li>
                 )
               })}
@@ -661,6 +736,8 @@ function RoomPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [hasConnectedOnce, setHasConnectedOnce] = useState(false)
+  const [showLeaveModal, setShowLeaveModal] = useState(false)
+  const [roomInstance, setRoomInstance] = useState(null)
   const [scheduledStartIso, setScheduledStartIso] = useState('')
   const [scheduledCountdown, setScheduledCountdown] = useState('')
 
@@ -726,6 +803,7 @@ function RoomPage() {
   }
 
   const handleRoomDisconnected = () => {
+    console.log('[Meeting Left]', { role, roomName, participantName })
     if (hasConnectedOnce) {
       navigate('/', { replace: false })
       return
@@ -735,6 +813,27 @@ function RoomPage() {
       'Could not join room. Check your .env values (URL, API key/secret) and token server.',
     )
     navigate('/', { replace: false })
+  }
+
+  const handleLeaveIntent = () => {
+    console.log('[Leave Clicked] Showing confirmation modal')
+    setShowLeaveModal(true)
+  }
+
+  const handleCancelLeave = () => {
+    setShowLeaveModal(false)
+  }
+
+  const handleConfirmLeave = async () => {
+    console.log('[Leave Confirmed] Disconnecting from meeting')
+    setShowLeaveModal(false)
+    try {
+      if (roomInstance) {
+        await roomInstance.disconnect()
+      }
+    } finally {
+      navigate('/', { replace: false })
+    }
   }
 
   if (!participantName || !roomName || !role) {
@@ -808,23 +907,58 @@ function RoomPage() {
         connect
         video
         audio
-        onConnected={() => setHasConnectedOnce(true)}
+        onConnected={() => {
+          console.log('[Meeting Joined]', { role, roomName, participantName })
+          setHasConnectedOnce(true)
+        }}
         onError={handleRoomError}
         onDisconnected={handleRoomDisconnected}
         data-lk-theme="default"
-        className="livekit-room"
+        className={`livekit-room role-${normalizeRole(role)}`}
       >
+        <ControlBarActionLogger />
+        <LeaveConfirmInterceptor
+          onLeaveIntent={handleLeaveIntent}
+          onRoomReady={setRoomInstance}
+        />
         <div className="room-layout">
           <section className="video-section">
             <VideoConference />
           </section>
-          <aside className="chat-section">
-            <h2>Room Chat</h2>
-            <Chat />
-          </aside>
         </div>
         <RoomAudioRenderer />
       </LiveKitRoom>
+      {showLeaveModal && (
+        <div className="leave-modal-backdrop" role="presentation">
+          <div
+            className="leave-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="leave-modal-title"
+          >
+            <h2 id="leave-modal-title">Leave meeting?</h2>
+            <p>
+              Your call will end and you will return to the join screen.
+            </p>
+            <div className="leave-modal-actions">
+              <button
+                type="button"
+                className="leave-modal-btn secondary"
+                onClick={handleCancelLeave}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="leave-modal-btn danger"
+                onClick={handleConfirmLeave}
+              >
+                Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

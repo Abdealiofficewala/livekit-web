@@ -1,7 +1,7 @@
 import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
-import { AccessToken } from 'livekit-server-sdk'
+import { AccessToken, TrackSource } from 'livekit-server-sdk'
 
 dotenv.config()
 
@@ -26,6 +26,7 @@ app.get('/health', (_req, res) => {
 
 app.post('/getToken', async (req, res) => {
   const { roomName, participantName, role } = req.body
+  const normalizedRole = String(role || 'patient').trim().toLowerCase()
 
   if (!roomName || !participantName) {
     return res.status(400).json({
@@ -37,15 +38,25 @@ app.post('/getToken', async (req, res) => {
     identity: participantName,
     ttl: '1h',
     name: participantName,
-    metadata: JSON.stringify({ role: role || 'patient' }),
+    metadata: JSON.stringify({ role: normalizedRole }),
   })
+
+  const doctorSources = [
+    TrackSource.CAMERA,
+    TrackSource.MICROPHONE,
+    TrackSource.SCREEN_SHARE,
+    TrackSource.SCREEN_SHARE_AUDIO,
+  ]
+  const patientSources = [TrackSource.CAMERA, TrackSource.MICROPHONE]
 
   at.addGrant({
     room: roomName,
     roomJoin: true,
-    canPublish: true,
     canSubscribe: true,
     canPublishData: true,
+    // SDK requires TrackSource enums, not strings (strings throw in toJwt).
+    canPublishSources:
+      normalizedRole === 'doctor' ? doctorSources : patientSources,
   })
 
   const token = await at.toJwt()
