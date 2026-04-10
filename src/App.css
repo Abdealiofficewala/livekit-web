@@ -341,6 +341,15 @@
   box-shadow: 0 14px 28px rgba(20, 32, 62, 0.08);
 }
 
+.meeting-item:focus {
+  outline: none;
+}
+
+.meeting-item:focus-visible {
+  border-color: #3f5efb;
+  box-shadow: 0 0 0 3px rgba(63, 94, 251, 0.25);
+}
+
 .meeting-row {
   display: flex;
   justify-content: space-between;

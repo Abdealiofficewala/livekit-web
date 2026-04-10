@@ -491,15 +491,23 @@ function JoinPage() {
                 const showCountdown = Boolean(startIso) && !isOpenNow
                 const isStartingSoon = showCountdown && secondsLeft <= 60
                 const canQuickJoin = Boolean(startIso) && (isOpenNow || secondsLeft <= 60)
+                const openMeetingCard = () => {
+                  if (!roomName) return
+                  setMeetingName('')
+                  setMeetingModal({ isOpen: true, roomName, startIso })
+                }
                 return (
                   <li key={roomName || `${startIso}-${listTick}`}>
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
                       className="meeting-item"
-                      onClick={() => {
-                        if (!roomName) return
-                        setMeetingName('')
-                        setMeetingModal({ isOpen: true, roomName, startIso })
+                      onClick={openMeetingCard}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          openMeetingCard()
+                        }
                       }}
                     >
                       <div className="meeting-row">
@@ -576,7 +584,7 @@ function JoinPage() {
                           </button>
                         </div>
                       )}
-                    </button>
+                    </div>
                   </li>
                 )
               })}
